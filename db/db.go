@@ -55,6 +55,15 @@ func GetTable[V Tableable](db *DB, name string) (*Table[V], error) {
 	return t.(*Table[V]), nil
 }
 
+func MustGetTable[V Tableable](db *DB, name string) *Table[V] {
+	t, err := GetTable[V](db, name)
+	if err != nil {
+		panic(err)
+	}
+
+	return t
+}
+
 func LoadTable[V Tableable](db *DB, name string, dir string) error {
 	t, err := GetTable[V](db, name)
 	if err != nil {
