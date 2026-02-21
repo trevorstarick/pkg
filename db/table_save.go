@@ -14,6 +14,10 @@ import (
 func (t *Table[V]) Save(path string) error {
 	var f io.WriteCloser
 
+	if !t.changedSinceLastSave.Load() {
+		return nil
+	}
+
 	filename := filepath.Base(path) + time.Now().Format("_20060102_150405")
 	dir := filepath.Dir(path)
 
@@ -86,6 +90,8 @@ func (t *Table[V]) Save(path string) error {
 			slog.Error("table save rename", "error", err)
 		}
 	}
+
+	t.changedSinceLastSave.Store(false)
 
 	return nil
 }

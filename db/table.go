@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"reflect"
 	"strings"
+	"sync/atomic"
 )
 
 type Tableable interface {
@@ -40,18 +41,20 @@ type table[V Tableable] interface {
 var _ table[Tableable] = (*Table[Tableable])(nil)
 
 type Table[V Tableable] struct {
-	data          Map[any, *V]
-	uniqueIndices Map[string, Index[V]]
-	indicies      Map[string, Index[V]]
-	sortLut       Map[string, Sort[V]]
+	changedSinceLastSave atomic.Bool
+	data                 Map[any, *V]
+	uniqueIndices        Map[string, Index[V]]
+	indicies             Map[string, Index[V]]
+	sortLut              Map[string, Sort[V]]
 }
 
 func NewTable[V Tableable]() *Table[V] {
 	table := Table[V]{
-		data:          Map[any, *V]{},
-		uniqueIndices: Map[string, Index[V]]{},
-		indicies:      Map[string, Index[V]]{},
-		sortLut:       Map[string, Sort[V]]{},
+		changedSinceLastSave: atomic.Bool{},
+		data:                 Map[any, *V]{},
+		uniqueIndices:        Map[string, Index[V]]{},
+		indicies:             Map[string, Index[V]]{},
+		sortLut:              Map[string, Sort[V]]{},
 	}
 
 	t := reflect.TypeFor[V]()
@@ -183,6 +186,7 @@ func (t *Table[V]) Set(value V) *V {
 	}
 
 	t.data.Store(pkey, &value)
+	t.changedSinceLastSave.Store(true)
 
 	t.index(&value)
 	t.sort(&value)
@@ -266,9 +270,13 @@ func (t *Table[V]) Delete(key V) bool {
 	_, ok := t.data.LoadAndDelete(pkey)
 	if !ok {
 		slog.Debug("table delete: key not found", "v", fmt.Sprintf("%T", *new(V)), "key", key)
+
+		return false
 	}
 
-	return ok
+	t.changedSinceLastSave.Store(true)
+
+	return true
 }
 
 func (t *Table[V]) Reindex(name string) error {
