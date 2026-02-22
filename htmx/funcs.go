@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/davecgh/go-spew/spew"
@@ -47,14 +48,14 @@ func getTemplateFuncs(r *http.Request) map[string]any {
 
 	if r != nil {
 		funcs["ctx"] = r.Context().Value
-		funcs["query_params"] = func() string { return r.URL.RawQuery }
-		funcs["is_boosted"] = func() bool { return r.Header.Get("Hx-Boosted") == "true" }
+		funcs["queryParams"] = func() url.Values { return r.URL.Query() }
+		funcs["isBoosted"] = func() bool { return r.Header.Get("Hx-Boosted") == "true" }
 	} else {
 		fn := func() { slog.Warn("func not supported when request is nil") }
 
 		funcs["ctx"] = fn
-		funcs["query_params"] = fn
-		funcs["is_boosted"] = fn
+		funcs["queryParams"] = fn
+		funcs["isBoosted"] = fn
 	}
 
 	return funcs
