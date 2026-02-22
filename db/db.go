@@ -75,7 +75,7 @@ func LoadTable[V Tableable](db *DB, name string, dir string) error {
 		return err
 	}
 
-	t.Iter()(func(key any, value *V) bool {
+	t.Iter(func(key any, value *V) bool {
 		if (*value).IsPlaceholder() {
 			slog.Debug("skipping placeholder resolve", "table", name, "key", key)
 
@@ -166,7 +166,7 @@ func Iter[V Tableable](db *DB, name string) func(yield func(any, *V) bool) {
 		return nil
 	}
 
-	return t.Iter()
+	return t.Iter
 }
 
 func GetOrSet[V Tableable](db *DB, name string, value V) (*V, error) {

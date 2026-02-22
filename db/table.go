@@ -34,7 +34,8 @@ type table[V Tableable] interface {
 
 	Contains(v V) bool
 
-	Iter() func(yield func(any, *V) bool)
+	Iter(yield func(any, *V) bool)
+	SortedIter(yield func(any, *V) bool)
 	Len() int
 }
 
@@ -323,8 +324,12 @@ func (t *Table[V]) Contains(v V) bool {
 	return t.Get(v) != nil
 }
 
-func (t *Table[V]) Iter() func(yield func(any, *V) bool) {
-	return t.data.Range
+func (t *Table[V]) Iter(yield func(any, *V) bool) {
+	t.data.Range(yield)
+}
+
+func (t *Table[V]) SortedIter(yield func(any, *V) bool) {
+	t.data.SortedRange(yield)
 }
 
 func (t *Table[V]) Len() int {
