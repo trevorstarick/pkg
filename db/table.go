@@ -35,6 +35,7 @@ type table[V Tableable] interface {
 	Delete(key V) bool
 
 	Contains(v V) bool
+	At(i int) *V
 
 	Iter(yield func(any, *V) bool)
 	AddSort(name string, fn func(a, b *V) int)
@@ -320,6 +321,24 @@ func (t *Table[V]) Reindex(name string) error {
 
 func (t *Table[V]) Contains(v V) bool {
 	return t.Get(v) != nil
+}
+
+func (t *Table[V]) At(i int) *V {
+	s, ok := t.sortTrees.Load("default")
+	if ok {
+		v, ok := s.GetAt(i)
+		if ok {
+			return v
+		}
+
+		slog.Warn("table at: index out of range in default sort tree", "v", fmt.Sprintf("%T", *new(V)), "index", i)
+
+		return nil
+	}
+
+	slog.Warn("table at: default sort tree not found, falling back to unsorted iteration", "v", fmt.Sprintf("%T", *new(V)))
+
+	return nil
 }
 
 func (t *Table[V]) Iter(yield func(any, *V) bool) {
