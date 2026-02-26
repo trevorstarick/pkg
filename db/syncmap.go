@@ -9,14 +9,21 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+
+	bloom "github.com/bits-and-blooms/bloom/v3"
 )
 
 type Map[K comparable, V any] struct {
-	m sync.Map
-	c atomic.Int64
+	m     sync.Map
+	c     atomic.Int64
+	bloom bloom.BloomFilter
 }
 
 func (m *Map[K, V]) Load(key K) (V, bool) {
+	if !m.bloom.Test(fmt.Appendf([]byte{}, "%v", key)) {
+		return *(new(V)), false
+	}
+
 	iface, ok := m.m.Load(key)
 	if !ok {
 		return *(new(V)), ok
@@ -42,6 +49,7 @@ func (m *Map[K, V]) LoadOrStore(key K, value V) (V, bool) {
 	iface, loaded := m.m.LoadOrStore(key, value)
 	if !loaded {
 		m.c.Add(1)
+		m.bloom.Add(fmt.Appendf([]byte{}, "%v", key))
 	}
 
 	//nolint:forcetypeassert // this is a Generic type, and we know it's a V
@@ -50,6 +58,7 @@ func (m *Map[K, V]) LoadOrStore(key K, value V) (V, bool) {
 
 func (m *Map[K, V]) store(key K, value V) {
 	m.m.Store(key, value)
+	m.bloom.Add(fmt.Appendf([]byte{}, "%v", key))
 	m.c.Add(1)
 }
 
@@ -122,6 +131,10 @@ func (m *Map[K, V]) SortedRange(f func(K, V) bool) {
 }
 
 func (m *Map[K, V]) Contains(key K) bool {
+	if !m.bloom.Test(fmt.Appendf([]byte{}, "%v", key)) {
+		return false
+	}
+
 	_, ok := m.m.Load(key)
 
 	return ok
