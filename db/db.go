@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"path/filepath"
 	"reflect"
+
+	"github.com/tidwall/btree"
 )
 
 type DB struct {
@@ -109,6 +111,16 @@ func LoadTable[V Tableable](db *DB, name string, dir string) error {
 
 				return true
 			}
+
+			return true
+		})
+
+		return true
+	})
+
+	t.sortTrees.Range(func(_ string, sort *btree.BTreeG[*V]) bool {
+		t.data.Range(func(_ any, v *V) bool {
+			sort.Set(v)
 
 			return true
 		})

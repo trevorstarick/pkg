@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"sync/atomic"
+
+	"github.com/tidwall/btree"
 )
 
 type Tableable interface {
@@ -35,7 +37,8 @@ type table[V Tableable] interface {
 	Contains(v V) bool
 
 	Iter(yield func(any, *V) bool)
-	SortedIter(yield func(any, *V) bool)
+	AddSort(name string, fn func(a, b *V) int)
+	SortedIter(name string, asc bool, yield func(any, *V) bool)
 	Len() int
 }
 
@@ -46,7 +49,7 @@ type Table[V Tableable] struct {
 	data                 Map[any, *V]
 	uniqueIndices        Map[string, Index[V]]
 	indicies             Map[string, Index[V]]
-	sortLut              Map[string, Sort[V]]
+	sortTrees            Map[string, *btree.BTreeG[*V]]
 }
 
 func NewTable[V Tableable]() *Table[V] {
@@ -55,7 +58,7 @@ func NewTable[V Tableable]() *Table[V] {
 		data:                 Map[any, *V]{},
 		uniqueIndices:        Map[string, Index[V]]{},
 		indicies:             Map[string, Index[V]]{},
-		sortLut:              Map[string, Sort[V]]{},
+		sortTrees:            Map[string, *btree.BTreeG[*V]]{},
 	}
 
 	t := reflect.TypeFor[V]()
@@ -136,13 +139,17 @@ func (t *Table[V]) AddIndex(key string, index Index[V]) {
 func (t *Table[V]) AddSort(key string, fn func(a, b *V) int) {
 	slog.Debug("table addsort", "v", fmt.Sprintf("%T", *new(V)), "key", key)
 
-	if t.sortLut.Contains(key) {
-		slog.Warn("table addsort: sort already exists", "v", fmt.Sprintf("%T", *new(V)), "key", key)
+	sort := btree.NewBTreeG[*V](func(a, b *V) bool {
+		return fn(a, b) < 0
+	})
 
-		return
-	}
+	t.Iter(func(_ any, v *V) bool {
+		sort.Set(v)
 
-	t.sortLut.Store(key, *NewSort(fn))
+		return true
+	})
+
+	t.sortTrees.Store(key, sort)
 }
 
 func (t *Table[V]) checkForUnique(value V) (*V, bool) {
@@ -190,7 +197,11 @@ func (t *Table[V]) Set(value V) *V {
 	t.changedSinceLastSave.Store(true)
 
 	t.index(&value)
-	t.sort(&value)
+	t.sortTrees.Range(func(_ string, tree *btree.BTreeG[*V]) bool {
+		tree.Set(&value)
+
+		return true
+	})
 
 	return &value
 }
@@ -307,19 +318,6 @@ func (t *Table[V]) Reindex(name string) error {
 	return nil
 }
 
-func (t *Table[V]) Resort(name string) {
-	slog.Debug("table resort", "v", fmt.Sprintf("%T", *new(V)), "sort", name)
-
-	sort, ok := t.sortLut.Load(name)
-	if !ok {
-		slog.Warn("table resort: sort not found", "v", fmt.Sprintf("%T", *new(V)), "sort", name)
-
-		return
-	}
-
-	sort.Sort()
-}
-
 func (t *Table[V]) Contains(v V) bool {
 	return t.Get(v) != nil
 }
@@ -328,8 +326,27 @@ func (t *Table[V]) Iter(yield func(any, *V) bool) {
 	t.data.Range(yield)
 }
 
-func (t *Table[V]) SortedIter(yield func(any, *V) bool) {
-	t.data.SortedRange(yield)
+func (t *Table[V]) SortedIter(name string, asc bool, yield func(any, *V) bool) {
+	l, ok := t.sortTrees.Load(name)
+	if !ok {
+		slog.Warn("table sortediter: sort not found, defaulting to unsorted iteration", "v", fmt.Sprintf("%T", *new(V)), "sort", name)
+
+		t.data.SortedRange(yield)
+
+		return
+	}
+
+	if !asc {
+		l.Reverse(func(v *V) bool {
+			return yield(nil, v)
+		})
+
+		return
+	}
+
+	l.Scan(func(v *V) bool {
+		return yield(nil, v)
+	})
 }
 
 func (t *Table[V]) Len() int {
@@ -358,17 +375,6 @@ func (t *Table[V]) append(value V) *V {
 	}
 
 	return t.data.StoreAndReturn(pkey, &value)
-}
-
-func (t *Table[V]) sort(v *V) {
-	slog.Debug("table sort", "v", fmt.Sprintf("%T", *new(V)))
-
-	t.sortLut.Range(func(_ string, srt Sort[V]) bool {
-		srt.Add(v)
-		srt.Sort()
-
-		return true
-	})
 }
 
 func (t *Table[V]) index(v *V) {
