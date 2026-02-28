@@ -1,7 +1,8 @@
 package db
 
 import (
-	"encoding/json"
+	json "encoding/json"
+	jsonv2 "encoding/json/v2"
 	"fmt"
 	"reflect"
 	"slices"
@@ -17,7 +18,7 @@ func UnmarshalJSONPointer[V any](b []byte, p *V) error {
 	case '"': // string
 		var s string
 
-		err := json.Unmarshal(b, &s)
+		err := jsonv2.Unmarshal(b, &s)
 		if err != nil {
 			panic(fmt.Errorf("%w: %s", err, string(b)))
 		}
@@ -41,7 +42,7 @@ func UnmarshalJSONPointer[V any](b []byte, p *V) error {
 				if isPrimaryKey && vElem.Field(i).CanSet() {
 					fieldPtr := reflect.New(field.Type)
 
-					err := json.Unmarshal(b, fieldPtr.Interface())
+					err := jsonv2.Unmarshal(b, fieldPtr.Interface())
 					if err != nil {
 						return err
 					}
@@ -60,16 +61,16 @@ func UnmarshalJSONPointer[V any](b []byte, p *V) error {
 	case 'n': // null
 		return nil
 	case '[':
-		return json.Unmarshal(b, p)
+		return jsonv2.Unmarshal(b, p)
 	case '{':
-		if _, ok := any(p).(json.Unmarshaler); !ok {
-			return json.Unmarshal(b, p)
+		if _, ok := any(p).(jsonv2.Unmarshaler); !ok {
+			return jsonv2.Unmarshal(b, p)
 		}
 
 		// Unmarshal object manually
 		var raw map[string]json.RawMessage
 
-		err := json.Unmarshal(b, &raw)
+		err := jsonv2.Unmarshal(b, &raw)
 		if err != nil {
 			return err
 		}
@@ -95,7 +96,7 @@ func UnmarshalJSONPointer[V any](b []byte, p *V) error {
 			if rawValue, ok := raw[tagName]; ok && fieldValue.CanSet() {
 				fieldPtr := reflect.New(field.Type)
 
-				err := json.Unmarshal(rawValue, fieldPtr.Interface())
+				err := jsonv2.Unmarshal(rawValue, fieldPtr.Interface())
 				if err != nil {
 					return err
 				}
@@ -104,7 +105,7 @@ func UnmarshalJSONPointer[V any](b []byte, p *V) error {
 			}
 		}
 	default:
-		return json.Unmarshal(b, p)
+		return jsonv2.Unmarshal(b, p)
 	}
 
 	return nil
