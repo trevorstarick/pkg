@@ -37,7 +37,7 @@ type table[V Tableable] interface {
 	Contains(v V) bool
 	At(i int) *V
 
-	Iter(yield func(any, *V) bool)
+	Iter() func(yield func(any, *V) bool)
 	AddSort(name string, fn func(a, b *V) int)
 	SortedIter(name string, asc bool, yield func(any, *V) bool)
 	Len() int
@@ -144,11 +144,9 @@ func (t *Table[V]) AddSort(key string, fn func(a, b *V) int) {
 		return fn(a, b) < 0
 	})
 
-	t.Iter(func(_ any, v *V) bool {
+	for _, v := range t.Iter() {
 		sort.Set(v)
-
-		return true
-	})
+	}
 
 	t.sortTrees.Store(key, sort)
 }
@@ -158,16 +156,14 @@ func (t *Table[V]) checkForUnique(value V) (*V, bool) {
 
 	found := false
 
-	t.uniqueIndices.Range(func(_ string, i Index[V]) bool {
+	for _, i := range t.uniqueIndices.Iter() {
 		if vv := i.Lookup(value); vv != nil {
 			v = vv
 			found = true
 
-			return false
+			break
 		}
-
-		return true
-	})
+	}
 
 	return v, found
 }
@@ -198,11 +194,9 @@ func (t *Table[V]) Set(value V) *V {
 	t.changedSinceLastSave.Store(true)
 
 	t.index(&value)
-	t.sortTrees.Range(func(_ string, tree *btree.BTreeG[*V]) bool {
+	for _, tree := range t.sortTrees.Iter() {
 		tree.Set(&value)
-
-		return true
-	})
+	}
 
 	return &value
 }
@@ -220,19 +214,17 @@ func (t *Table[V]) Get(v V) *V {
 
 	res := (*V)(nil)
 
-	t.uniqueIndices.Range(func(key string, index Index[V]) bool {
+	for key, index := range t.uniqueIndices.Iter() {
 		if vv := index.Lookup(v); vv != nil {
 			res = vv
 
 			slog.Debug("table get: found value in unique index", "v", fmt.Sprintf("%T", *new(V)), "key", key, "index", index)
 
-			return false
+			break
 		}
 
 		slog.Debug("table get: key not found in index", "v", fmt.Sprintf("%T", *new(V)), "key", key, "index", index)
-
-		return true
-	})
+	}
 
 	if res != nil {
 		return res
@@ -240,7 +232,7 @@ func (t *Table[V]) Get(v V) *V {
 
 	slog.Debug("table get: key not found in any unique index", "v", fmt.Sprintf("%T", *new(V)), "key", v)
 
-	t.indicies.Range(func(key string, index Index[V]) bool {
+	t.indicies.Iter()(func(key string, index Index[V]) bool {
 		if vv := index.Lookup(v); vv != nil {
 			res = vv
 
@@ -302,7 +294,7 @@ func (t *Table[V]) Reindex(name string) error {
 		return nil
 	}
 
-	t.data.Range(func(_ any, v *V) bool {
+	for _, v := range t.data.Iter() {
 		err := index.Index(v)
 		if err != nil {
 			slog.Warn("table reindex: index constraint violation",
@@ -312,9 +304,7 @@ func (t *Table[V]) Reindex(name string) error {
 				"error", err,
 			)
 		}
-
-		return true
-	})
+	}
 
 	return nil
 }
@@ -341,8 +331,8 @@ func (t *Table[V]) At(i int) *V {
 	return nil
 }
 
-func (t *Table[V]) Iter(yield func(any, *V) bool) {
-	t.data.Range(yield)
+func (t *Table[V]) Iter() func(yield func(any, *V) bool) {
+	return t.data.Iter()
 }
 
 func (t *Table[V]) SortedIter(name string, asc bool, yield func(any, *V) bool) {
@@ -399,7 +389,7 @@ func (t *Table[V]) append(value V) *V {
 func (t *Table[V]) index(v *V) {
 	slog.Debug("table index", "v", fmt.Sprintf("%T", *new(V)))
 
-	t.indicies.Range(func(s string, i Index[V]) bool {
+	t.indicies.Iter()(func(s string, i Index[V]) bool {
 		err := i.Index(v)
 		if err != nil {
 			slog.Warn("table index constraint violation", "v", fmt.Sprintf("%T", *new(V)), "value", *v, "key", s, "error", err)

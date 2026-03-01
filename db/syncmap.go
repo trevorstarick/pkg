@@ -81,11 +81,13 @@ func (m *Map[K, V]) Delete(key K) {
 	m.delete(key)
 }
 
-func (m *Map[K, V]) Range(f func(K, V) bool) {
-	m.m.Range(func(key, value any) bool {
-		//nolint:forcetypeassert // this is a Generic type, and we know it's a K,V
-		return f(key.(K), value.(V))
-	})
+func (m *Map[K, V]) Iter() func(yield func(K, V) bool) {
+	return func(yield func(K, V) bool) {
+		m.m.Range(func(key, value any) bool {
+			//nolint:forcetypeassert // this is a Generic type, and we know it's a K,V
+			return yield(key.(K), value.(V))
+		})
+	}
 }
 
 func (m *Map[K, V]) SortedRange(f func(K, V) bool) {

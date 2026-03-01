@@ -77,7 +77,7 @@ func LoadTable[V Tableable](db *DB, name string, dir string) error {
 		return err
 	}
 
-	t.Iter(func(key any, value *V) bool {
+	t.Iter()(func(key any, value *V) bool {
 		if (*value).IsPlaceholder() {
 			slog.Debug("skipping placeholder resolve", "table", name, "key", key)
 
@@ -103,8 +103,8 @@ func LoadTable[V Tableable](db *DB, name string, dir string) error {
 		return true
 	})
 
-	t.uniqueIndices.Range(func(_ string, index Index[V]) bool {
-		t.data.Range(func(_ any, v *V) bool {
+	t.uniqueIndices.Iter()(func(_ string, index Index[V]) bool {
+		t.data.Iter()(func(_ any, v *V) bool {
 			err = index.Index(v)
 			if err != nil {
 				slog.Error("failed to index value", "fn", "load", "table", name, "error", err)
@@ -118,8 +118,8 @@ func LoadTable[V Tableable](db *DB, name string, dir string) error {
 		return true
 	})
 
-	t.sortTrees.Range(func(_ string, sort *btree.BTreeG[*V]) bool {
-		t.data.Range(func(_ any, v *V) bool {
+	t.sortTrees.Iter()(func(_ string, sort *btree.BTreeG[*V]) bool {
+		t.data.Iter()(func(_ any, v *V) bool {
 			sort.Set(v)
 
 			return true
@@ -178,7 +178,7 @@ func Iter[V Tableable](db *DB, name string) func(yield func(any, *V) bool) {
 		return nil
 	}
 
-	return t.Iter
+	return t.Iter()
 }
 
 func GetOrSet[V Tableable](db *DB, name string, value V) (*V, error) {
@@ -210,7 +210,7 @@ func Set[V Tableable](db *DB, name string, value V) (*V, error) {
 
 	vv := t.Set(value)
 
-	t.uniqueIndices.Range(func(_ string, i Index[V]) bool {
+	t.uniqueIndices.Iter()(func(_ string, i Index[V]) bool {
 		err = i.Index(vv)
 		if err != nil {
 			slog.Error("failed to index value", "fn", "set", "table", name, "error", err)
@@ -221,7 +221,7 @@ func Set[V Tableable](db *DB, name string, value V) (*V, error) {
 		return true
 	})
 
-	t.indicies.Range(func(_ string, i Index[V]) bool {
+	t.indicies.Iter()(func(_ string, i Index[V]) bool {
 		err := i.Index(vv)
 		if err != nil {
 			slog.Error("failed to index value", "fn", "set", "table", name, "error", err)
