@@ -81,7 +81,7 @@ func (m *Map[K, V]) Delete(key K) {
 	m.delete(key)
 }
 
-func (m *Map[K, V]) Iter() func(yield func(K, V) bool) {
+func (m *Map[K, V]) Iter() func(func(K, V) bool) {
 	return func(yield func(K, V) bool) {
 		m.m.Range(func(key, value any) bool {
 			//nolint:forcetypeassert // this is a Generic type, and we know it's a K,V
@@ -90,44 +90,46 @@ func (m *Map[K, V]) Iter() func(yield func(K, V) bool) {
 	}
 }
 
-func (m *Map[K, V]) SortedRange(f func(K, V) bool) {
-	keys := make([]K, 0)
+func (m *Map[K, V]) SortedRange() func(func(K, V) bool) {
+	return func(yield func(K, V) bool) {
+		keys := make([]K, 0)
 
-	m.m.Range(func(key, _ any) bool {
-		if k, ok := key.(K); ok {
-			keys = append(keys, k)
-		} else {
-			slog.Warn("key is not of type K", "key", key)
+		m.m.Range(func(key, _ any) bool {
+			if k, ok := key.(K); ok {
+				keys = append(keys, k)
+			} else {
+				slog.Warn("key is not of type K", "key", key)
+
+				return true
+			}
 
 			return true
-		}
+		})
 
-		return true
-	})
+		slices.SortStableFunc(keys, func(a, b K) int {
+			if _, ok := any(a).(fmt.Stringer); ok {
+				//nolint:forcetypeassert // we do the type assertion in the if statement, so we know it's a fmt.Stringer
+				return cmp.Compare(any(a).(fmt.Stringer).String(), any(b).(fmt.Stringer).String())
+			}
 
-	slices.SortStableFunc(keys, func(a, b K) int {
-		if _, ok := any(a).(fmt.Stringer); ok {
-			//nolint:forcetypeassert // we do the type assertion in the if statement, so we know it's a fmt.Stringer
-			return cmp.Compare(any(a).(fmt.Stringer).String(), any(b).(fmt.Stringer).String())
-		}
+			switch any(a).(type) {
+			case string:
+				//nolint:forcetypeassert // we do the type assertion in the switch statement, so we know it's a string
+				return cmp.Compare(any(a).(string), any(b).(string))
+			case int:
+				//nolint:forcetypeassert // we do the type assertion in the switch statement, so we know it's an int
+				return any(a).(int) - any(b).(int)
+			default:
+				panic("unsupported key type")
+			}
+		})
 
-		switch any(a).(type) {
-		case string:
-			//nolint:forcetypeassert // we do the type assertion in the switch statement, so we know it's a string
-			return cmp.Compare(any(a).(string), any(b).(string))
-		case int:
-			//nolint:forcetypeassert // we do the type assertion in the switch statement, so we know it's an int
-			return any(a).(int) - any(b).(int)
-		default:
-			panic("unsupported key type")
-		}
-	})
-
-	for _, key := range keys {
-		value, _ := m.m.Load(key)
-		//nolint:forcetypeassert // this is a Generic type, and we know it's a V
-		if !f(key, value.(V)) {
-			break
+		for _, key := range keys {
+			value, _ := m.m.Load(key)
+			//nolint:forcetypeassert // this is a Generic type, and we know it's a V
+			if !yield(key, value.(V)) {
+				break
+			}
 		}
 	}
 }

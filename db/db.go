@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"path/filepath"
 	"reflect"
-
-	"github.com/tidwall/btree"
 )
 
 type DB struct {
@@ -77,56 +75,49 @@ func LoadTable[V Tableable](db *DB, name string, dir string) error {
 		return err
 	}
 
-	t.Iter()(func(key any, value *V) bool {
+	for key, value := range t.Iter() {
 		if (*value).IsPlaceholder() {
 			slog.Debug("skipping placeholder resolve", "table", name, "key", key)
 
-			return true
+			continue
 		}
 
 		if value == nil {
 			slog.Error("nil value encountered during resolve", "table", name, "key", key)
 
-			return true
+			continue
 		}
 
 		v, err := (*value).ResolvePointers(db)
 		if err != nil {
 			slog.Error("resolving pointers", "table", name, "key", key, "error", err)
+
+			continue
 		}
 
 		if v != nil {
 			//nolint:forcetypeassert // we know this is a *V because of the type of the table
 			*value = v.(V)
 		}
+	}
+	slog.Info("finished resolving pointers for table", "table", name, "values", t.data.Len())
 
-		return true
-	})
-
-	t.uniqueIndices.Iter()(func(_ string, index Index[V]) bool {
-		t.data.Iter()(func(_ any, v *V) bool {
+	for _, index := range t.uniqueIndices.Iter() {
+		for _, v := range t.data.Iter() {
 			err = index.Index(v)
 			if err != nil {
 				slog.Error("failed to index value", "fn", "load", "table", name, "error", err)
-
-				return true
 			}
+		}
+	}
+	slog.Info("finished indexing unique indices for table", "table", name, "indices", t.uniqueIndices.Len())
 
-			return true
-		})
-
-		return true
-	})
-
-	t.sortTrees.Iter()(func(_ string, sort *btree.BTreeG[*V]) bool {
-		t.data.Iter()(func(_ any, v *V) bool {
-			sort.Set(v)
-
-			return true
-		})
-
-		return true
-	})
+	for _, tree := range t.sortTrees.Iter() {
+		for _, v := range t.data.Iter() {
+			tree.Set(v)
+		}
+	}
+	slog.Info("finished indexing sort trees for table", "table", name, "trees", t.sortTrees.Len())
 
 	return nil
 }

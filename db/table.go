@@ -1,6 +1,7 @@
 package db
 
 import (
+	"cmp"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -40,7 +41,7 @@ type table[V Tableable] interface {
 
 	Iter() func(yield func(any, *V) bool)
 	AddSort(name string, fn func(a, b *V) int)
-	SortedIter(name string, asc bool, yield func(any, *V) bool)
+	SortedIter(name string, asc bool) func(yield func(any, *V) bool)
 	Len() int
 }
 
@@ -142,7 +143,12 @@ func (t *Table[V]) AddSort(key string, fn func(a, b *V) int) {
 	slog.Debug("table addsort", "v", fmt.Sprintf("%T", *new(V)), "key", key)
 
 	sort := btree.NewBTreeG[*V](func(a, b *V) bool {
-		return fn(a, b) < 0
+		r := fn(a, b)
+		if r == 0 {
+			return cmp.Less((*a).String(), (*b).String())
+		}
+
+		return r < 0
 	})
 
 	for _, v := range t.Iter() {
@@ -336,27 +342,28 @@ func (t *Table[V]) Iter() func(yield func(any, *V) bool) {
 	return t.data.Iter()
 }
 
-func (t *Table[V]) SortedIter(name string, asc bool, yield func(any, *V) bool) {
+func (t *Table[V]) SortedIter(name string, asc bool) func(func(any, *V) bool) {
 	l, ok := t.sortTrees.Load(name)
 	if !ok {
 		slog.Warn("table sortediter: sort not found, defaulting to unsorted iteration", "v", fmt.Sprintf("%T", *new(V)), "sort", name)
 
-		t.data.SortedRange(yield)
-
-		return
+		return t.data.SortedRange()
 	}
 
 	if !asc {
-		l.Reverse(func(v *V) bool {
-			return yield(nil, v)
-		})
-
-		return
+		return func(yield func(any, *V) bool) {
+			l.Iter()
+			l.Reverse(func(v *V) bool {
+				return yield(nil, v)
+			})
+		}
 	}
 
-	l.Scan(func(v *V) bool {
-		return yield(nil, v)
-	})
+	return func(yield func(any, *V) bool) {
+		l.Scan(func(v *V) bool {
+			return yield(nil, v)
+		})
+	}
 }
 
 func (t *Table[V]) Len() int {
