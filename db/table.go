@@ -11,6 +11,7 @@ import (
 )
 
 type Tableable interface {
+	String() string
 	IsPlaceholder() bool
 	ResolvePointers(db *DB) (any, error)
 }
