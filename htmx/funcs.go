@@ -28,6 +28,8 @@ var templateFuncs = map[string]any{
 	"trimSpace":  strings.TrimSpace,
 	"trimPrefix": strings.TrimPrefix,
 	"trimSuffix": strings.TrimSuffix,
+
+	"replace": strings.ReplaceAll,
 }
 
 // this is a global variable that holds the extra template funcs, and is
