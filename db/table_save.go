@@ -41,11 +41,11 @@ func (t *Table[V]) Save(path string) error {
 	defer writer.Flush()
 
 	slog.Info("table save", "v", fmt.Sprintf("%T", *new(V)), "len", t.data.Len())
-	t.data.SortedRange(func(_ any, p *V) bool {
+	for _, p := range t.data.SortedRange() {
 		if p == nil {
 			slog.Error("nil value encountered during save", "v", fmt.Sprintf("%T", *new(V)))
 
-			return true
+			continue
 		}
 
 		v := *p
@@ -54,25 +54,23 @@ func (t *Table[V]) Save(path string) error {
 		if err != nil {
 			slog.Error("table save marshal", "v", fmt.Sprintf("%T", v), "error", err)
 
-			return true
+			continue
 		}
 
 		_, err = writer.Write(b)
 		if err != nil {
 			slog.Error("table save write", "v", fmt.Sprintf("%T", v), "error", err)
 
-			return true
+			continue
 		}
 
 		_, err = writer.WriteString("\n")
 		if err != nil {
 			slog.Error("table save write newline", "v", fmt.Sprintf("%T", v), "error", err)
 
-			return true
+			continue
 		}
-
-		return true
-	})
+	}
 
 	err := writer.Flush()
 	if err != nil {
