@@ -33,6 +33,21 @@ func (htmx *HTMX) TemplateHandler(data ...any) func(w http.ResponseWriter, r *ht
 		funcs := getTemplateFuncs(r)
 		pathNames := htmx.convertRequestToTemplatePaths(r)
 
+		var path string
+		for _, p := range pathNames {
+			if _, err := os.Stat(p); err == nil {
+				path = p
+
+				break
+			}
+		}
+
+		if path == "" {
+			slog.Warn("no template found for request", "path", r.URL.Path, "pattern", r.Pattern)
+
+			return errors.New("no template found for request")
+		}
+
 		templateBody, err := htmx.getTemplateBody(path)
 		if err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
