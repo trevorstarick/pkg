@@ -9,9 +9,9 @@ import (
 	"strings"
 )
 
-func TemplateHandlerFunc(data ...any) http.HandlerFunc {
+func (htmx *HTMX) TemplateHandlerFunc(data ...any) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := TemplateHandler(data...)(w, r)
+		err := htmx.TemplateHandler(data...)(w, r)
 		if err != nil {
 			slog.Error("template handler", "error", err)
 
@@ -20,7 +20,7 @@ func TemplateHandlerFunc(data ...any) http.HandlerFunc {
 	}
 }
 
-func TemplateHandler(data ...any) func(w http.ResponseWriter, r *http.Request) error {
+func (htmx *HTMX) TemplateHandler(data ...any) func(w http.ResponseWriter, r *http.Request) error {
 	if len(data) == 0 {
 		data = append(data, nil)
 	} else if len(data) > 1 {
@@ -31,9 +31,9 @@ func TemplateHandler(data ...any) func(w http.ResponseWriter, r *http.Request) e
 
 	return func(w http.ResponseWriter, r *http.Request) error {
 		funcs := getTemplateFuncs(r)
-		pathName := convertRequestToTemplatePath(r)
+		pathNames := htmx.convertRequestToTemplatePaths(r)
 
-		templateBody, err := getTemplateBody(pathName)
+		templateBody, err := htmx.getTemplateBody(path)
 		if err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
 				return err

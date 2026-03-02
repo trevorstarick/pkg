@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func partialLoader(name string) (template.HTML, error) {
+func (htmx *HTMX) partialLoader(name string) (template.HTML, error) {
 	if name == "" {
 		slog.Debug("load function: empty name")
 
@@ -29,7 +29,7 @@ func partialLoader(name string) (template.HTML, error) {
 	return template.HTML(strings.TrimSuffix(string(bytes), "\n")), nil
 }
 
-func convertRequestToTemplatePath(r *http.Request) string {
+func (htmx *HTMX) convertRequestToTemplatePaths(r *http.Request) []string {
 	var part string
 
 	if r.Header.Get("Hx-Request") == "true" {
@@ -67,7 +67,7 @@ func readTemplateFile(path string) (string, error) {
 	return string(contentData), nil
 }
 
-func loadPartials(data string) (string, error) {
+func (htmx *HTMX) loadPartials(data string) (string, error) {
 	re := regexp.MustCompile(`{{ load "(.*)" }}`)
 
 	for re.MatchString(data) {
@@ -76,7 +76,7 @@ func loadPartials(data string) (string, error) {
 		for _, load := range loads {
 			partialName := load[1]
 
-			partialContent, err := partialLoader(partialName)
+			partialContent, err := htmx.partialLoader(partialName)
 			if err != nil {
 				return "", fmt.Errorf("load partial %s: %w", partialName, err)
 			}
@@ -88,13 +88,13 @@ func loadPartials(data string) (string, error) {
 	return data, nil
 }
 
-func getTemplateBody(path string) (*template.HTML, error) {
+func (htmx HTMX) getTemplateBody(path string) (*template.HTML, error) {
 	data, err := readTemplateFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	data, err = loadPartials(data)
+	data, err = htmx.loadPartials(data)
 	if err != nil {
 		return nil, fmt.Errorf("load partials: %w", err)
 	}
