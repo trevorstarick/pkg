@@ -18,7 +18,14 @@ func (htmx *HTMX) partialLoader(name string) (template.HTML, error) {
 		return template.HTML(""), nil
 	}
 
-	filename := filepath.Join("views/components/", name+".html")
+	var filename string
+	for _, dir := range append(htmx.TemplateDirs, "views") {
+		filename = filepath.Join(dir, "components", name+".html")
+
+		if _, err := os.Stat(filename); err == nil {
+			break
+		}
+	}
 
 	bytes, err := os.ReadFile(filename)
 	if err != nil {
