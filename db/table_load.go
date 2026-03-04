@@ -2,7 +2,6 @@ package db
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -23,9 +22,9 @@ func (t *Table[V]) load(path string) error {
 
 		var v V
 
-		err = json.Unmarshal(bytes, &v)
+		err = t.unmarshal(bytes, &v)
 		if err != nil {
-			slog.Warn("issue unmarshalling", "error", err)
+			slog.Warn("issue unmarshalling", "error", err, "bytes", string(bytes))
 
 			continue
 		}
